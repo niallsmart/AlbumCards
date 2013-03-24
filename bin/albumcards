@@ -1,0 +1,9 @@
+#!/bin/bash
+
+export LIBNFC_LOG_LEVEL=3
+export LIBNFC_LOG_FILE=/dev/null
+
+while true; do
+	./bin/nfc-poll 2>/$LIBNFC_LOG_FILE | grep --line-buffered UID
+done
+
