@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.7
 
 import sys
 import os
@@ -6,15 +6,15 @@ import subprocess
 import signal
 import atexit
 import re
+import ConfigParser
+
 from spotify_web.spotify import SpotifyAPI
 from sys import stderr
 
 def log(message):
-	sys.stderr.write("%s: %s\n" % (os.path.basename(sys.argv[0]), message))
+	sys.stderr.write("%s: %s\n" % (os.path.basename(__file__), message))
 
 class AlbumCards:
-
-	baseDir = os.path.dirname(sys.argv[0])
 
 	def kill_player(self):
 		if self.mpg123:
@@ -41,16 +41,17 @@ class AlbumCards:
 	def play_tag(self, tag):
 		if self.now_playing == tag:
 			return
+		self.now_playing = tag
 		try:
-			track_uri = config["tags"][tag]
+			track_uri = config.get("tags", tag)
 			self.play_track_uri(track_uri)
 			self.now_playing = tag
-		except KeyError:
+		except ConfigParser.Error:
 			print "unknown tag: %s" % (tag)
 
 	def poll_nfc(self):
 		log("starting nfc-poll")
-		self.poller = subprocess.Popen(os.path.join(self.baseDir, self.config["poller"]), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+		self.poller = subprocess.Popen(self.config.defaults().get("poller"), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 		log("spawned nfc-poll as process %d" % self.poller.pid)
 		while True:
 			line = self.poller.stdout.readline()
@@ -78,21 +79,18 @@ class AlbumCards:
 		log("connecting...")
 		#login_callback(None, True)
 		self.sp = SpotifyAPI(lambda sp, logged_in: self.login_callback(sp, logged_in))
-		self.sp.connect(config["username"], config["password"])
+		self.sp.connect(config.defaults().get("username"), config.defaults().get("password"))
 		self.poll_nfc()
 		self.sp.disconnect()
 
-config = {
-	"username": "niallsmart",
-	"password": "rnwk",
-	"tags": {
-		"04a31c52bc2b80":	"spotify:track:5yEPxDjbbzUzyauGtnmVEC",
-		"04541c52bc2b80":	"spotify:track:1yFORmqWN4bKhboS8inzzv"
-	},
-	"poller": "nfc-poll"
-}
+def makePath(*parts):
+	parts = (os.path.dirname(__file__), "..") + parts
+	return os.path.join(*parts)
 
-
+config = ConfigParser.RawConfigParser({
+	"poller": makePath("bin", "nfc-poll")
+})
+config.read(makePath("conf", "albumcards.conf"))
 
 ac = AlbumCards(config)
 ac.start()
