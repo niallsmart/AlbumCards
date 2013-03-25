@@ -101,8 +101,8 @@ main(int argc, const char *argv[])
 
   nfc_target nt;
   int res = 0;
-  //int tries = 2000000000;
-  int tries = 3;
+  int tries = 2000000000;
+  //int tries = 3;
 
   nfc_context *context;
   nfc_init(&context);

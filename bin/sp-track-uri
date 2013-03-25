@@ -1,0 +1,34 @@
+#!/usr/bin/env python
+
+import sys
+sys.path.append("..")
+import os
+from spotify_web.spotify import SpotifyAPI
+from sys import stderr
+
+def log(message):
+    sys.stderr.write("%s: %s\n" % (os.path.basename(sys.argv[0]), message))
+
+def track_uri_callback(sp, result):
+    log("found URI")
+    print result["uri"]
+    sp.disconnect()
+
+def track_callback(sp, track):
+    sp.track_uri(track, track_uri_callback)
+
+
+def login_callback(sp, logged_in):
+    if logged_in:
+        track = sp.metadata_request(sys.argv[3])
+	log("fetching URI for %s" % track.name)
+        sp.track_uri(track, track_uri_callback)
+    else:
+        print "%s: error logging in" % sys.argv[0]
+
+if len(sys.argv) < 4:
+    print "Usage: %s <username> <password> <track-uri>" % sys.argv[0]
+else:
+    log("connecting...")
+    sp = SpotifyAPI(login_callback)
+    sp.connect(sys.argv[1], sys.argv[2])
