@@ -134,7 +134,6 @@ main(int argc, const char *argv[])
       char* buf;
       str_nfc_target(&buf, nt, verbose);
       printf("%s\n", buf);
-      printf("going to flush\n");
       fflush(NULL);
       free(buf);
       sleep(1.0);

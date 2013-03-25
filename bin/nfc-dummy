@@ -1,0 +1,17 @@
+#!/bin/sh
+
+cat <<EOF
+ISO/IEC 14443A (106 kbps) target:
+    ATQA (SENS_RES): 00  44  
+       UID (NFCID1): 04  a3  1c  52  bc  2b  80  
+      SAK (SEL_RES): 00  
+EOF
+sleep 5
+
+cat <<EOF
+ISO/IEC 14443A (106 kbps) target:
+    ATQA (SENS_RES): 00  44  
+       UID (NFCID1): gh ij
+      SAK (SEL_RES): 00  
+EOF
+sleep 5

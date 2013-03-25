@@ -3,45 +3,96 @@
 import sys
 import os
 import subprocess
+import signal
+import atexit
+import re
 from spotify_web.spotify import SpotifyAPI
 from sys import stderr
 
 def log(message):
 	sys.stderr.write("%s: %s\n" % (os.path.basename(sys.argv[0]), message))
 
-def playback_uri_callback(sp, result):
-	log("found URI")
-	print result["uri"]
+class AlbumCards:
 
-#	sp.disconnect()
+	baseDir = os.path.dirname(sys.argv[0])
 
-def fetch_playback_uri(track_uri, cb):
-	track = sp.metadata_request(track_uri)
-	log("fetching playback URI for %s" % track.name)
-	sp.track_uri(track, cb)
+	def kill_player(self):
+		if self.mpg123:
+			self.mpg123.send_signal(signal.SIGINT)	# KILL/QUIT hangs the RPi
+			self.mpg123.wait()
+			self.mpg123 = None
 
-def poll_nfc():
-	poller = subprocess.POpen(os.path.join(baseDir, "nfc-poll"), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	log("spawned nfc-poll as process %d", poller.pid)
-	while True:
-		line = poller.stdout.readline()
-		log(line)
-	log("nfc-poll exited with %d", poller.returncode)
+	def kill_poller(self):
+		if self.poller:
+			self.poller.send_signal(signal.SIGINT)	# KILL/QUIT hangs the RPi
+			self.poller.wait()
+			self.poller = None
 
-def login_callback(sp, logged_in):
-	if logged_in:
-		poll_nfc()
-		#fetch_playback_uri("spotify:track:5yEPxDjbbzUzyauGtnmVEC", playback_uri_callback)
-	else:
-		print "%s: error logging in" % sys.argv[0]
+	def play_stream(self, uri):
+		self.kill_player()
+		self.mpg123 = subprocess.Popen(["mpg123", "-q", uri])
 
-baseDir = os.path.dirname(sys.argv[0])
+	def play_track_uri(self, track_uri):
+		log("fetching metadata for %s" % track_uri)
+		track = self.sp.metadata_request(track_uri)
+		log("fetching playback URI for %s" % track.name)
+		self.sp.track_uri(track, lambda sp, result: self.play_stream(result["uri"]))
 
-log("loaded from %s" % baseDir)
+	def play_tag(self, tag):
+		if self.now_playing == tag:
+			return
+		try:
+			track_uri = config["tags"][tag]
+			self.play_track_uri(track_uri)
+			self.now_playing = tag
+		except KeyError:
+			print "unknown tag: %s" % (tag)
 
-if len(sys.argv) < 3:
-	print "Usage: %s <username> <password>" % sys.argv[0]
-else:
-	log("connecting...")
-	sp = SpotifyAPI(login_callback)
-	sp.connect(sys.argv[1], sys.argv[2])
+	def poll_nfc(self):
+		log("starting nfc-poll")
+		self.poller = subprocess.Popen(os.path.join(self.baseDir, self.config["poller"]), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+		log("spawned nfc-poll as process %d" % self.poller.pid)
+		while True:
+			line = self.poller.stdout.readline()
+			if line == None or line == "": break
+			m = re.search('UID.*:(.*)', line)
+			if m:
+				self.play_tag(m.group(1).replace(' ', ''))
+		self.poller.wait()
+		log("nfc-poll exited with %s" % self.poller.returncode)
+
+	def login_callback(self, sp, logged_in):
+		if not logged_in:
+			print "%s: error logging in" % sys.argv[0]
+			sys.exit(1)
+
+	def __init__(self, config): 
+		self.mpg123 = None
+		self.poller = None
+		self.config = config
+		self.now_playing = None
+		atexit.register(lambda: self.kill_player())
+		atexit.register(lambda: self.kill_poller())
+
+	def start(self):
+		log("connecting...")
+		#login_callback(None, True)
+		self.sp = SpotifyAPI(lambda sp, logged_in: self.login_callback(sp, logged_in))
+		self.sp.connect(config["username"], config["password"])
+		self.poll_nfc()
+		self.sp.disconnect()
+
+config = {
+	"username": "niallsmart",
+	"password": "rnwk",
+	"tags": {
+		"04a31c52bc2b80":	"spotify:track:5yEPxDjbbzUzyauGtnmVEC",
+		"04541c52bc2b80":	"spotify:track:1yFORmqWN4bKhboS8inzzv"
+	},
+	"poller": "nfc-poll"
+}
+
+
+
+ac = AlbumCards(config)
+ac.start()
