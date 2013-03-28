@@ -7,6 +7,7 @@ import signal
 import atexit
 import re
 import ConfigParser
+import time
 
 from spotify_web.spotify import SpotifyAPI
 from sys import stderr
@@ -18,7 +19,12 @@ class AlbumCards:
 
 	def kill_player(self):
 		if self.mpg123:
-			self.mpg123.send_signal(signal.SIGINT)	# KILL/QUIT hangs the RPi
+			log("stopping playback")
+			# sometimes takes two SIGINTs to promptly stop mpg123
+			# (and KILL/QUIT hands the RPi)
+			self.mpg123.send_signal(signal.SIGINT)
+			time.sleep(0.1)
+			self.mpg123.send_signal(signal.SIGINT)
 			self.mpg123.wait()
 			self.mpg123 = None
 
@@ -29,19 +35,28 @@ class AlbumCards:
 			self.poller = None
 
 	def play_stream(self, uri):
+		log("playing %s" % uri)
 		self.kill_player()
-		self.mpg123 = subprocess.Popen(["mpg123", "-q", uri])
+		self.mpg123 = subprocess.Popen(["mpg123", "-q", "-b", "0", "-a", self.config.defaults().get("audio"), uri])
 
 	def play_track_uri(self, track_uri):
-		log("fetching metadata for %s" % track_uri)
-		track = self.sp.metadata_request(track_uri)
-		log("fetching playback URI for %s" % track.name)
-		self.sp.track_uri(track, lambda sp, result: self.play_stream(result["uri"]))
+		if track_uri.startswith("file://"):
+			self.play_stream(track_uri[7:])
+		else:
+			log("fetching metadata for %s" % track_uri)
+			track = self.sp.metadata_request(track_uri)
+			log("fetching playback URI for %s" % track.name)
+			self.sp.track_uri(track, lambda sp, result: self.play_stream(result["uri"]))
 
 	def play_tag(self, tag):
+		if tag == "0": log("no tag present")
+		else: log("tag %s present" % tag)
 		if self.now_playing == tag:
 			return
 		self.now_playing = tag
+		if tag == "0":
+			self.kill_player()
+			return
 		try:
 			track_uri = config.get("tags", tag)
 			self.play_track_uri(track_uri)
@@ -79,7 +94,7 @@ class AlbumCards:
 		log("connecting...")
 		#login_callback(None, True)
 		self.sp = SpotifyAPI(lambda sp, logged_in: self.login_callback(sp, logged_in))
-		self.sp.connect(config.defaults().get("username"), config.defaults().get("password"))
+		#self.sp.connect(config.defaults().get("username"), config.defaults().get("password"))
 		self.poll_nfc()
 		self.sp.disconnect()
 
@@ -88,7 +103,8 @@ def makePath(*parts):
 	return os.path.join(*parts)
 
 config = ConfigParser.RawConfigParser({
-	"poller": makePath("bin", "nfc-poll")
+	"poller": makePath("bin", "nfc-poll"),
+	"audio": "/dev/audio"
 })
 config.read(makePath("conf", "albumcards.conf"))
 

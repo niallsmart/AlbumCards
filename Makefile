@@ -7,3 +7,5 @@ bin/nfc-poll: src/nfc-poll.c
 clean:
 	rm bin/nfc-poll
 
+loc:
+	cat */*.c */*.py */*.sh | egrep -v '^\W*$$' | wc -l

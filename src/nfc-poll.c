@@ -88,7 +88,7 @@ main(int argc, const char *argv[])
     }
   }
 
-  const uint8_t uiPollNr = 5;
+  const uint8_t uiPollNr = 1;
   const uint8_t uiPeriod = 2;
   const nfc_modulation nmModulations[] = {
     { .nmt = NMT_ISO14443A, .nbr = NBR_106 },
@@ -137,6 +137,9 @@ main(int argc, const char *argv[])
       fflush(NULL);
       free(buf);
       sleep(1.0);
+    } else if (res == NFC_ECHIP) {
+      printf("UID: 0\n");
+      fflush(NULL);
     }
   } while ( (res == NFC_ECHIP || res > 0) && --tries > 0);
 
